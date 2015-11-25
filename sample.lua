@@ -33,6 +33,7 @@ cmd:option('-temperature',1,'temperature of sampling')
 cmd:option('-gpuid',0,'which gpu to use. -1 = use CPU')
 cmd:option('-opencl',0,'use OpenCL (instead of CUDA)')
 cmd:option('-verbose',1,'set to 0 to ONLY print the sampled text, no diagnostics')
+cmd:option('-testchar','','character to test prob')
 cmd:text()
 
 -- parse input params
@@ -40,7 +41,7 @@ opt = cmd:parse(arg)
 
 -- gated print: simple utility function wrapping a print
 function gprint(str)
-    if opt.verbose == 1 then print(str) end
+--    if opt.verbose == 1 then print(str) end
 end
 
 -- check that cunn/cutorch are installed if user wants to use the GPU
@@ -90,10 +91,12 @@ protos.rnn:evaluate() -- put in eval mode so that dropout works properly
 -- initialize the vocabulary (and its inverted version)
 local vocab = checkpoint.vocab
 local ivocab = {}
+local iivocab = {}
+for c,i in pairs(vocab) do iivocab[c] = i end
 for c,i in pairs(vocab) do ivocab[i] = c end
 
 -- initialize the rnn state to all zeros
-gprint('creating an ' .. checkpoint.opt.model .. '...')
+--gprint('creating an ' .. checkpoint.opt.model .. '...')
 local current_state
 current_state = {}
 for L = 1,checkpoint.opt.num_layers do
@@ -111,11 +114,11 @@ state_size = #current_state
 -- do a few seeded timesteps
 local seed_text = opt.primetext
 if string.len(seed_text) > 0 then
-    gprint('seeding with ' .. seed_text)
-    gprint('--------------------------')
+   -- gprint('seeding with ' .. seed_text)
+  --  gprint('--------------------------')
     for c in seed_text:gmatch'.' do
         prev_char = torch.Tensor{vocab[c]}
-        io.write(ivocab[prev_char[1]])
+--        io.write(ivocab[prev_char[1]])
         if opt.gpuid >= 0 and opt.opencl == 0 then prev_char = prev_char:cuda() end
         if opt.gpuid >= 0 and opt.opencl == 1 then prev_char = prev_char:cl() end
         local lst = protos.rnn:forward{prev_char, unpack(current_state)}
@@ -126,13 +129,18 @@ if string.len(seed_text) > 0 then
     end
 else
     -- fill with uniform probabilities over characters (? hmm)
-    gprint('missing seed text, using uniform probability over first character')
-    gprint('--------------------------')
+  --  gprint('missing seed text, using uniform probability over first character')
+   -- gprint('--------------------------')
     prediction = torch.Tensor(1, #ivocab):fill(1)/(#ivocab)
     if opt.gpuid >= 0 and opt.opencl == 0 then prediction = prediction:cuda() end
     if opt.gpuid >= 0 and opt.opencl == 1 then prediction = prediction:cl() end
 end
-
+--print('sdfsdfsdfsdffsdfs')
+--print(iivocab[opt.testchar])
+--print(prediction)
+--print(prediction[1][iivocab[opt.testchar]])
+local probret = prediction[1][iivocab[opt.testchar]]
+print(probret)
 -- start sampling/argmaxing
 for i=1, opt.length do
 
@@ -148,14 +156,26 @@ for i=1, opt.length do
         probs:div(torch.sum(probs)) -- renormalize so probs sum to one
         prev_char = torch.multinomial(probs:float(), 1):resize(1):float()
     end
-
     -- forward the rnn for next character
     local lst = protos.rnn:forward{prev_char, unpack(current_state)}
     current_state = {}
     for i=1,state_size do table.insert(current_state, lst[i]) end
     prediction = lst[#lst] -- last element holds the log probabilities
 
-    io.write(ivocab[prev_char[1]])
+--    print(prediction)
+ --   io.write(ivocab[prev_char[1]])
+    --print("")
+--    print(iivocab[opt.testchar])
+  --  print(prediction)
+    --print(prediction[1][iivocab[opt.testchar]])
+    --print(prediction[iivocab[opt.testchar]])
+--    print(prev_char)
+    --print(prev_char[1])
+    --print(prediction)
+    --print(probs)
+   -- print(lst[1])
+   -- print("done")
 end
-io.write('\n') io.flush()
+do return probret end
+--io.write('\n') io.flush()
 
